@@ -15,7 +15,7 @@ from polytopewalk.dense import DenseCenter
 from polytopewalk import FacialReduction
 # from polytopewalk import denseFullWalkRun # Not needed for custom adaptive loop
 
-# --- 1. THE ADAPTIVE BATCH FUNCTION ---
+# THE ADAPTIVE BATCH FUNCTION
 def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000, 
                          batch_iter=10000, r=0.5, thin=10, time_limit=None):
     """
@@ -34,7 +34,7 @@ def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000,
     max_batches = 200
     
     while current_ess < target_ess and batch_count < max_batches:
-        # 1. Check Time Limit BEFORE running the next expensive batch
+        # Check Time Limit BEFORE running the next expensive batch
         if time_limit is not None and total_time > time_limit:
             print(f"\n[{name:<11}]   -> TIMEOUT ({total_time:.1f}s > {time_limit}s). Stopping method.")
             return 0, total_time, None
@@ -149,7 +149,7 @@ dims = [10,20,30,40,50]
 TARGET_ESS = 200
 TIME_LIMIT_SEC = 60 * 30  # 60 Minutes
 
-# Status flags: All methods start as Active (True)
+# Status flags. Choose true or false based on your needs. Note that dikinls is not working.
 active_methods = {
     "ball": False,
     "hit": False,
@@ -165,7 +165,7 @@ for dim in dims:
     print(f"\n{'='*40}")
     print(f"***Running for dimension {dim} and ESS {TARGET_ESS}***", flush=True)
 
-    # 1. GENERATE POLYTOPE (Do this once per dim)
+    # GENERATE POLYTOPE (Do this once per dim)
     #init, dense_A, dense_b, name = generate_rotated_hypercube_direct(dim, angle_deg=53)
     #init, dense_A, dense_b, name = generate_rotated_simplex_direct(dim, angle_deg=53)
     #init, dense_A, dense_b, name = generate_birkhoff_direct(dim*dim)
@@ -182,8 +182,7 @@ for dim in dims:
     init = dc.getInitialPoint(dense_A, dense_b)
     print(f"Generated {name}.")
 
-    # 2. PREPARE PARAMETERS (Get radii/thinning for this dim)
-    # (Assuming your get_radius/get_thin functions handle cases even if we skip execution)
+    # PREPARE PARAMETERS 
     r_dikin  = get_radius("dikin", dim)
     r_vaidya = get_radius("vaidya", dim)
     r_john   = get_radius("john", dim)
@@ -198,7 +197,6 @@ for dim in dims:
         dikin = DikinWalk(r=r_dikin)
         bs_dikin = get_batch_size("dikin", dim)
         
-        # Pass the time_limit here
         e_dikin, t_dikin, samples_dikin = run_until_target_ess(
             dikin, "Dikin Walk", init, dense_A, dense_b, 
             TARGET_ESS, bs_dikin, r_dikin, thin_dikin, 
@@ -209,34 +207,27 @@ for dim in dims:
             # Create the figure and 3D axis
             fig = plt.figure(figsize=(8, 8))
             ax = fig.add_subplot(111, projection='3d')
-            
-            # Extract X, Y, Z coordinates. 
-            # This assumes samples_dikin is a numpy array with shape (Number_of_Samples, 3).
-            # If your array is transposed (3, Number_of_Samples), use samples_dikin[0, :], etc.
+          
             xs = samples_dikin[:, 0] # type: ignore
             ys = samples_dikin[:, 1] # type: ignore
             zs = samples_dikin[:, 2] # type: ignore
             
-            # Plot the samples with some transparency (alpha) to see the density
             ax.scatter(xs, ys, zs, alpha=0.5, s=15, c='dodgerblue', marker='o') # type: ignore
-            
-            # Lock the axes to [0, 1] to clearly show the order polytope's bounding box
+     
             ax.set_xlim([0, 1])
             ax.set_ylim([0, 1])
             ax.set_zlim([0, 1])
             
-            # Labels and Title
             ax.set_xlabel('X_1 (Coordinate 1)', fontweight='bold')
             ax.set_ylabel('X_2 (Coordinate 2)', fontweight='bold')
             ax.set_zlabel('X_3 (Coordinate 3)', fontweight='bold')
             ax.set_title(f'Dikin Walk Samples in 3D Order Polytope (Facets: {m})', fontweight='bold')
             
-            # Adjust viewing angle for a better isometric perspective
             ax.view_init(elev=30, azim=45)
             
             plt.show()
         #####################PLOT END########################################################
-        # If ESS is 0, it means it timed out -> Kill it for future dims
+        # If ESS is 0, it means it timed out. Kill it for future dims
         if e_dikin == 0:
             print("!!! Dikin Walk timed out. Disabling for future dimensions.")
             active_methods["dikin"] = False
@@ -292,8 +283,6 @@ for dim in dims:
         print("Skipping John Walk (previously timed out).")
         e_john, t_john, psrf_john = 0, 0, 0
 
-
-    # 4. SAVE RESULTS
     results.append({
         "dim": dim,
         "Dikin_ESS": e_dikin,
@@ -309,12 +298,11 @@ for dim in dims:
         "John_Time": t_john
     })
     
-    # Optional: Save intermediate results after every dimension so you don't lose data if script crashes
     pd.DataFrame(results).to_csv("benchmark_results_partial.csv", index=False)
 
-# Final Save
 df_results = pd.DataFrame(results)
 output_file = "benchmark_results.txt"
 with open(output_file, "w") as f:
     f.write(df_results.to_string())
+
 print(f"\nResults saved to {output_file}")
