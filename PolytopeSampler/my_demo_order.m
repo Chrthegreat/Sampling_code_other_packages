@@ -1,4 +1,3 @@
-% Experiment Parameters
 dims = [500]; 
 targetESS = 800;
 base_seed = 42;
@@ -12,8 +11,8 @@ fprintf('Starting Order Polytope Experiment (Target ESS: %d)...\n', targetESS);
 
 for i = 1:length(dims)
     dim = dims(i); 
-    
-    % Replicate the C++ facet math: m = 3 * dim
+
+    % Number of facets
     m = 4 * dim; 
     
     % The bounding box (0 <= x <= 1) accounts for 2*dim facets.
@@ -25,23 +24,22 @@ for i = 1:length(dims)
             dim, m, num_relations);
     fprintf('========================================\n');
     
-    % --- REPLICATE VOLESTI RANDOM POSET LOGIC ---
+    % We replicate VOLESTI random poset logic
     
-    % Set seed (Mersenne Twister is the closest to C++ mt19937)
+    % Set seed 
     current_seed = base_seed + dim;
     rng(current_seed, 'twister'); 
     
-    % 1. Create and shuffle the order (MATLAB uses 1-based indexing)
+    % Create and shuffle the order (MATLAB uses 1-based indexing)
     order_vec = randperm(dim); 
     
-    % --- DEFINE ORDER POLYTOPE CONSTRAINTS ---
     P = struct;
     
-    % 2. Bounding Box: 0 <= x_i <= 1
+    % Bounding Box: 0 <= x_i <= 1
     P.lb = zeros(dim, 1);
     P.ub = ones(dim, 1);
     
-    % 3. Inequality Constraints: Aineq*x <= bineq
+    % Inequality Constraints: Aineq*x <= bineq
     P.Aineq = zeros(num_relations, dim);
     P.bineq = zeros(num_relations, 1);
     
@@ -72,10 +70,8 @@ for i = 1:length(dims)
         P.bineq(k) = 0;
     end
     
-    % --- SAMPLER OPTIONS ---
     opts = default_options();
 
-    % --- SAMPLE ---
     tic;
     o = sample(P, targetESS, opts); 
     rawTime = toc; 
@@ -84,11 +80,8 @@ for i = 1:length(dims)
     resultsData(i, :) = [dim, m, rawTime];
 
 
-    % --- PLOT 3D SAMPLES ---
+    % PLOT 3D SAMPLES (if dimension is 3D)
     if dim == 3
-        % NOTE: Depending on your specific MATLAB package, 'o' might be the 
-        % matrix of samples, or it might be a struct (like o.samples). 
-        % Adjust this next line if necessary!
         samples3D = o.samples; 
         
         % Make sure the matrix is N x 3 (Rows = points, Columns = coordinates)
@@ -98,7 +91,6 @@ for i = 1:length(dims)
         
         figure('Name', '3D Order Polytope Samples', 'Position', [200, 200, 600, 600]);
         
-        % Plot the points using a semi-transparent blue scatter plot
         scatter3(samples3D(:,1), samples3D(:,2), samples3D(:,3), 15, 'filled', ...
             'MarkerFaceAlpha', 0.6, 'MarkerFaceColor', [0 0.4470 0.7410]);
         
@@ -113,8 +105,8 @@ for i = 1:length(dims)
         title(sprintf('Order Polytope Samples (Dim = 3, Relations = %d)', num_relations));
         
         grid on;
-        view(45, 30); % Set a nice isometric viewing angle
-        drawnow;      % Force MATLAB to draw the plot immediately
+        view(45, 30);
+        drawnow;     
     end
 
 
@@ -127,4 +119,5 @@ end
 fprintf('\n\nFinal Results Table:\n');
 T = array2table(resultsData, 'VariableNames', ...
     {'Dimension', 'TotalFacets', 'RawTime_s'});
+
 disp(T);
