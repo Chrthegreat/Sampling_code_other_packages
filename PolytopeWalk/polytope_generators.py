@@ -3,9 +3,6 @@ import numpy as np
 import scipy.sparse as sparse
 from scipy.sparse import csr_matrix, lil_matrix, csr_array
 
-# This file holds generators for various polytopes.
-# The definitions came from either PolytopeWalk demos or Volesti generators
-
 ###########################################################################################################
 def generate_birkhoff(dim):
     d = int(math.floor(np.sqrt(dim)))
@@ -217,4 +214,121 @@ def generate_birkhoff_equalities(n):
     A_csr = A.tocsr()
     A_csr.indices = A_csr.indices.astype(np.int32)
     A_csr.indptr = A_csr.indptr.astype(np.int32)
+    return A_csr, b
+
+##################################################################################################
+
+def generate_random_order_polytope(dim, m, seed=None):
+    """
+    Generates a random order polytope matching Volesti's logic.
+    
+    Args:
+        dim: The dimension of the space.
+        m: Total number of facets (must be >= 2 * dim).
+        seed: Optional integer for reproducible random posets.
+        
+    Returns:
+        init: A strictly interior starting point for MCMC.
+        A: Inequality constraint matrix (m x dim).
+        b: Inequality constraint vector (m).
+        name: String identifier.
+    """
+    if m < 2 * dim:
+        raise ValueError(f"m (facets) must be at least 2*dim ({2*dim}). Got {m}.")
+        
+    rng = np.random.default_rng(seed)
+    
+    # 1. Create and shuffle the order
+    order = np.arange(dim)
+    rng.shuffle(order)
+    
+    # 2. Initialize constraint matrices (Ax <= b)
+    A = np.zeros((m, dim))
+    b = np.zeros(m)
+    
+    # 3. Ambient Bounding Box constraints: 0 <= x_i <= 1
+    # First `dim` rows: x_i <= 1
+    for i in range(dim):
+        A[i, i] = 1.0
+        b[i] = 1.0
+        
+    # Next `dim` rows: -x_i <= 0 (which means x_i >= 0)
+    for i in range(dim):
+        A[dim + i, i] = -1.0
+        b[dim + i] = 0.0
+        
+    # 4. Random Relational Constraints: x_u <= x_v
+    num_relations = m - 2 * dim
+    for k in range(num_relations):
+        # Sample two distinct indices
+        idx = rng.choice(dim, 2, replace=False)
+        x, y = np.min(idx), np.max(idx) # Ensure x < y
+        
+        u = order[x]
+        v = order[y]
+        
+        # Enforce x_u - x_v <= 0
+        row = 2 * dim + k
+        A[row, u] = 1.0
+        A[row, v] = -1.0
+        b[row] = 0.0
+        
+    # 5. Generate a strictly interior initial point
+    # Assigns values evenly spaced between 0 and 1 ensuring x_u < x_v
+    init = np.zeros(dim)
+    for i in range(dim):
+        init[order[i]] = (i + 1.0) / (dim + 1.0)
+        
+    name = f"OrderPolytope(dim={dim}, facets={m})"
+    
+    return init, A, b, name
+
+############################################################################################
+
+def generate_orderpoly_sparse(dim, m, seed=None):
+    if m < 2 * dim:
+        raise ValueError(f"m (facets) must be at least 2*dim ({2*dim}). Got {m}.")
+        
+    rng = np.random.default_rng(seed)
+    
+    # 1. Create and shuffle the order
+    order = np.arange(dim)
+    rng.shuffle(order)
+    
+    # 2. Initialize sparse matrix using lil_matrix
+    num_constraints = m
+    A = lil_matrix((num_constraints, dim), dtype=np.float64)
+    b = np.zeros(num_constraints, dtype=np.float64)
+    
+    # 3. Ambient Bounding Box constraints: 0 <= x_i <= 1
+    for i in range(dim):
+        # x_i <= 1
+        A[i, i] = 1.0
+        b[i] = 1.0
+        
+        # -x_i <= 0 (equivalent to x_i >= 0)
+        A[dim + i, i] = -1.0
+        b[dim + i] = 0.0
+        
+    # 4. Random Relational Constraints: x_u <= x_v
+    num_relations = m - 2 * dim
+    for k in range(num_relations):
+        # Sample two distinct indices
+        idx = rng.choice(dim, 2, replace=False)
+        x, y = np.min(idx), np.max(idx) # Ensure x < y
+        
+        u = order[x]
+        v = order[y]
+        
+        # Enforce x_u - x_v <= 0
+        row = 2 * dim + k
+        A[row, u] = 1.0
+        A[row, v] = -1.0
+        b[row] = 0.0
+        
+    # 5. Convert to CSR and enforce int32 exactly like your template
+    A_csr = A.tocsr()
+    A_csr.indices = A_csr.indices.astype(np.int32)
+    A_csr.indptr = A_csr.indptr.astype(np.int32)
+    
     return A_csr, b

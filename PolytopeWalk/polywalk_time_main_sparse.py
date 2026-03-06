@@ -9,6 +9,8 @@ from polytopewalk.sparse import SparseDikinWalk, SparseVaidyaWalk, SparseJohnWal
 from polytope_diagnostics import *
 from polytope_generators import *
 
+# Note, sparse algorithms expect Constrained Polytope Form using equalities.
+
 def get_batch_size(walk_type, dim):
     w = walk_type.lower()
     if "dikin" in w:
@@ -101,11 +103,11 @@ def run_until_target_ess(walk, name, start_point, A, b, k_dim, target_ess=1000,
 
 def run_sparse_benchmark():
 
-    dims = [5,7,9,12,15,18,20] 
+    dims = [3] 
     TARGET_ESS = 200
     TIME_LIMIT_SEC = 60 * 30  # 30 Minutes
     
-    # Active Flags. Set true of false for any method you like
+    # Active Flags
     active_methods = {
         "dikin": True,
         "vaidya": True,
@@ -120,7 +122,7 @@ def run_sparse_benchmark():
         print(f"*** Running Birkhoff N={N} (Ambient Dim {dim_ambient}) ***", flush=True)
         print(f"*** Target ESS: {TARGET_ESS} | Time Limit: {TIME_LIMIT_SEC}s ***")
 
-        # GENERATE & REDUCE
+        #GENERATE & REDUCE BIRKHOFF
         print("1. Generating & Reducing Polytope...", end=" ", flush=True)
         A_eq, b_eq = generate_birkhoff_equalities(N)
         k_ambient = A_eq.shape[1] # type: ignore

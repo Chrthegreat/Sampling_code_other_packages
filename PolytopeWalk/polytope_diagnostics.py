@@ -2,9 +2,6 @@ import numpy as np
 from numpy.fft import fft, ifft
 import arviz as az
 
-# This file holds some diagnostic functions. Some use arviz while for 
-# univariate_psrf and ess I copied the Volesti methods to make sure the values are the same.
-
 def univariate_psrf(samples):
 
     arr = np.asarray(samples)
@@ -44,20 +41,26 @@ def ess(samples):
             ess[i] = np.nan
             continue
 
+        # Normalize
         x = x / np.sqrt(var)
 
+        # Zero-pad to 2N for FFT
         x_padded = np.concatenate([x, np.zeros(N)])
         f = fft(x_padded)
         psd = np.real(f * np.conjugate(f))
         acf = np.real(ifft(psd))[:N] / N
 
+        # Use even-length section
         acf = acf[:N_even]
+        # Combine pairs like in C++ code (acf[j] + acf[j+1])
         acf_summed = acf[0::2] + acf[1::2]
 
+        # Cumulative minimum of autocorrelation
         for j in range(1, len(acf_summed)):
             if acf_summed[j] > acf_summed[j - 1]:
                 acf_summed[j] = acf_summed[j - 1]
 
+        # Sum positive autocorrelation terms
         gap = 0.0
         for val in acf_summed:
             if val > 0:
@@ -69,7 +72,11 @@ def ess(samples):
 
         ess[i] = N / gap
 
+    # Return the minimum ESS across dimensions
     ess_min = np.nanmin(ess)
+    if np.isnan(ess_min):
+        print("ESS is NaN")
+        return 0.0
     return ess_min
 
 def ess_arviz(samples):
@@ -86,7 +93,7 @@ def psrf_arviz(samples):
     N, d = arr.shape
     half = N // 2
 
-    # SAFETY CHECK: Handle odd number of samples 
+    # --- SAFETY CHECK: Handle odd number of samples ---
     if N % 2 != 0:
         # Drop the last sample to make N even
         arr = arr[:-1, :]

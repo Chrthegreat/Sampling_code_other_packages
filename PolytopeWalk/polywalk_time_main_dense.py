@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 import arviz as az
 import math
+import matplotlib.pyplot as plt
 
-from polytope_generators import generate_rotated_hypercube_direct, generate_rotated_simplex_direct, generate_birkhoff_direct
+from polytope_generators import *
 from polytope_diagnostics import *
 from polywalk_3D_plot import plot_3d_samples, get_and_print_matrices, inspect_raw_generator
 
@@ -12,8 +13,9 @@ from polytopewalk.dense import BallWalk, HitAndRun
 from polytopewalk.dense import DikinWalk, VaidyaWalk, JohnWalk, DikinLSWalk
 from polytopewalk.dense import DenseCenter
 from polytopewalk import FacialReduction
+# from polytopewalk import denseFullWalkRun # Not needed for custom adaptive loop
 
-# Main function for sampling
+# --- 1. THE ADAPTIVE BATCH FUNCTION ---
 def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000, 
                          batch_iter=10000, r=0.5, thin=10, time_limit=None):
     """
@@ -29,10 +31,10 @@ def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000,
     current_init = start_point.copy()
     current_ess = 0.0
     batch_count = 0
-    max_batches = 2000  
+    max_batches = 200
     
     while current_ess < target_ess and batch_count < max_batches:
-        # Check Time Limit BEFORE running the next expensive batch
+        # 1. Check Time Limit BEFORE running the next expensive batch
         if time_limit is not None and total_time > time_limit:
             print(f"\n[{name:<11}]   -> TIMEOUT ({total_time:.1f}s > {time_limit}s). Stopping method.")
             return 0, total_time, None
@@ -42,7 +44,7 @@ def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000,
         
         start_t = time.time()
         
-        # *****Run C++ backend******
+        # Run C++ backend
         new_batch = walk.generateCompleteWalk(
             batch_iter, current_init, A, b, 
             burnin=current_burnin, thin=thin, seed=8888 + batch_count
@@ -51,6 +53,7 @@ def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000,
         batch_time = time.time() - start_t
         total_time += batch_time
         
+        # Stack samples
         if all_samples is None:
             all_samples = new_batch
         else:
@@ -74,7 +77,7 @@ def run_until_target_ess(walk, name, start_point, A, b, target_ess=3000,
     
     return current_ess, total_time, all_samples
 
-# Different batch size for each walk. Choose your own if needs be.
+# Different batch size for each walk
 def get_batch_size(walk_type, dim):
 
     w = walk_type.lower()
@@ -97,9 +100,8 @@ def get_batch_size(walk_type, dim):
     if "dikinls" in w:
         return 12000 + 800 * dim
         
-    return 10000
+    return 1000
 
-# These values are used after trial and error 
 def get_radius(walk_type, dim):
 
     w = walk_type.lower()
@@ -140,14 +142,14 @@ def get_thin(walk_type, dim):
 
     return 100
 
-
+import pandas as pd
 
 # CONFIGURATION
-dims = [15]
-TARGET_ESS = 500
-TIME_LIMIT_SEC = 60 * 60  # 60 Minutes
+dims = [10,20,30,40,50]
+TARGET_ESS = 200
+TIME_LIMIT_SEC = 60 * 30  # 60 Minutes
 
-# Status flags. Choose true of false for the methods you want 
+# Status flags: All methods start as Active (True)
 active_methods = {
     "ball": False,
     "hit": False,
@@ -163,16 +165,25 @@ for dim in dims:
     print(f"\n{'='*40}")
     print(f"***Running for dimension {dim} and ESS {TARGET_ESS}***", flush=True)
 
-    # Generate Polytope. Comment and uncomment the one you like. Only one at a time.
+    # 1. GENERATE POLYTOPE (Do this once per dim)
     #init, dense_A, dense_b, name = generate_rotated_hypercube_direct(dim, angle_deg=53)
     #init, dense_A, dense_b, name = generate_rotated_simplex_direct(dim, angle_deg=53)
-    init, dense_A, dense_b, name = generate_birkhoff_direct(dim*dim)
+    #init, dense_A, dense_b, name = generate_birkhoff_direct(dim*dim)
+
+
+    # Order Polytopes
+    m = 3 * dim
+    base_seed = 42
+    init, dense_A, dense_b, name = generate_random_order_polytope(dim, m, seed=base_seed + dim)
+
     print(f"Finished dim={dim} (Ambient Dim: {dim*dim}, Intrinsic Dim: {(dim-1)**2})")
 
     dc = DenseCenter()
     init = dc.getInitialPoint(dense_A, dense_b)
     print(f"Generated {name}.")
 
+    # 2. PREPARE PARAMETERS (Get radii/thinning for this dim)
+    # (Assuming your get_radius/get_thin functions handle cases even if we skip execution)
     r_dikin  = get_radius("dikin", dim)
     r_vaidya = get_radius("vaidya", dim)
     r_john   = get_radius("john", dim)
@@ -193,12 +204,43 @@ for dim in dims:
             TARGET_ESS, bs_dikin, r_dikin, thin_dikin, 
             time_limit=TIME_LIMIT_SEC
         )
-        
+        #####################PLOT##############################
+        if dim == 3:
+            # Create the figure and 3D axis
+            fig = plt.figure(figsize=(8, 8))
+            ax = fig.add_subplot(111, projection='3d')
+            
+            # Extract X, Y, Z coordinates. 
+            # This assumes samples_dikin is a numpy array with shape (Number_of_Samples, 3).
+            # If your array is transposed (3, Number_of_Samples), use samples_dikin[0, :], etc.
+            xs = samples_dikin[:, 0] # type: ignore
+            ys = samples_dikin[:, 1] # type: ignore
+            zs = samples_dikin[:, 2] # type: ignore
+            
+            # Plot the samples with some transparency (alpha) to see the density
+            ax.scatter(xs, ys, zs, alpha=0.5, s=15, c='dodgerblue', marker='o') # type: ignore
+            
+            # Lock the axes to [0, 1] to clearly show the order polytope's bounding box
+            ax.set_xlim([0, 1])
+            ax.set_ylim([0, 1])
+            ax.set_zlim([0, 1])
+            
+            # Labels and Title
+            ax.set_xlabel('X_1 (Coordinate 1)', fontweight='bold')
+            ax.set_ylabel('X_2 (Coordinate 2)', fontweight='bold')
+            ax.set_zlabel('X_3 (Coordinate 3)', fontweight='bold')
+            ax.set_title(f'Dikin Walk Samples in 3D Order Polytope (Facets: {m})', fontweight='bold')
+            
+            # Adjust viewing angle for a better isometric perspective
+            ax.view_init(elev=30, azim=45)
+            
+            plt.show()
+        #####################PLOT END########################################################
         # If ESS is 0, it means it timed out -> Kill it for future dims
         if e_dikin == 0:
             print("!!! Dikin Walk timed out. Disabling for future dimensions.")
             active_methods["dikin"] = False
-            psrf_dikin = 0 
+            psrf_dikin = 0 # Placeholder
         else:
             psrf_dikin = univariate_psrf(samples_dikin)
     else:
@@ -251,7 +293,7 @@ for dim in dims:
         e_john, t_john, psrf_john = 0, 0, 0
 
 
-    # SAVE RESULTS
+    # 4. SAVE RESULTS
     results.append({
         "dim": dim,
         "Dikin_ESS": e_dikin,
@@ -267,7 +309,7 @@ for dim in dims:
         "John_Time": t_john
     })
     
-    # Save intermediate results after every dimension so we don't lose data if script crashes
+    # Optional: Save intermediate results after every dimension so you don't lose data if script crashes
     pd.DataFrame(results).to_csv("benchmark_results_partial.csv", index=False)
 
 # Final Save
