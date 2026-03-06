@@ -238,15 +238,15 @@ def generate_random_order_polytope(dim, m, seed=None):
         
     rng = np.random.default_rng(seed)
     
-    # 1. Create and shuffle the order
+    # Create and shuffle the order
     order = np.arange(dim)
     rng.shuffle(order)
     
-    # 2. Initialize constraint matrices (Ax <= b)
+    # Initialize constraint matrices (Ax <= b)
     A = np.zeros((m, dim))
     b = np.zeros(m)
     
-    # 3. Ambient Bounding Box constraints: 0 <= x_i <= 1
+    # Ambient Bounding Box constraints: 0 <= x_i <= 1
     # First `dim` rows: x_i <= 1
     for i in range(dim):
         A[i, i] = 1.0
@@ -257,7 +257,7 @@ def generate_random_order_polytope(dim, m, seed=None):
         A[dim + i, i] = -1.0
         b[dim + i] = 0.0
         
-    # 4. Random Relational Constraints: x_u <= x_v
+    # Random Relational Constraints: x_u <= x_v
     num_relations = m - 2 * dim
     for k in range(num_relations):
         # Sample two distinct indices
@@ -273,7 +273,7 @@ def generate_random_order_polytope(dim, m, seed=None):
         A[row, v] = -1.0
         b[row] = 0.0
         
-    # 5. Generate a strictly interior initial point
+    # Generate a strictly interior initial point
     # Assigns values evenly spaced between 0 and 1 ensuring x_u < x_v
     init = np.zeros(dim)
     for i in range(dim):
@@ -291,16 +291,16 @@ def generate_orderpoly_sparse(dim, m, seed=None):
         
     rng = np.random.default_rng(seed)
     
-    # 1. Create and shuffle the order
+    # Create and shuffle the order
     order = np.arange(dim)
     rng.shuffle(order)
     
-    # 2. Initialize sparse matrix using lil_matrix
+    # Initialize sparse matrix using lil_matrix
     num_constraints = m
     A = lil_matrix((num_constraints, dim), dtype=np.float64)
     b = np.zeros(num_constraints, dtype=np.float64)
     
-    # 3. Ambient Bounding Box constraints: 0 <= x_i <= 1
+    # Ambient Bounding Box constraints: 0 <= x_i <= 1
     for i in range(dim):
         # x_i <= 1
         A[i, i] = 1.0
@@ -310,7 +310,7 @@ def generate_orderpoly_sparse(dim, m, seed=None):
         A[dim + i, i] = -1.0
         b[dim + i] = 0.0
         
-    # 4. Random Relational Constraints: x_u <= x_v
+    # Random Relational Constraints: x_u <= x_v
     num_relations = m - 2 * dim
     for k in range(num_relations):
         # Sample two distinct indices
@@ -326,9 +326,10 @@ def generate_orderpoly_sparse(dim, m, seed=None):
         A[row, v] = -1.0
         b[row] = 0.0
         
-    # 5. Convert to CSR and enforce int32 exactly like your template
+    # Convert to CSR and enforce int32 
     A_csr = A.tocsr()
     A_csr.indices = A_csr.indices.astype(np.int32)
     A_csr.indptr = A_csr.indptr.astype(np.int32)
     
+
     return A_csr, b
